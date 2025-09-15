@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>배구 팀 짜기 PRO</title>
+<style>
+body { margin:0; font-family: Arial, sans-serif; }
+#main { display:flex; flex-wrap:wrap; padding:20px; gap:20px; justify-content:center; }
+#left { display:flex; flex-direction:column; align-items:center; }
+
+h1 { font-size:28px; margin-bottom:5px; }
+h2 { font-size:16px; margin-bottom:10px; color:#555; }
+
+#court {
+  position:relative; width:360px; height:720px;
+  background:#f5f5f5; border:4px solid #333; box-sizing:border-box;
+}
+#inner-line { position:absolute; top:10px; left:10px; width:calc(100%-20px); height:calc(100%-20px); border:2px solid #999; box-sizing:border-box; pointer-events:none; }
+#net { position:absolute; top:50%; left:0; width:100%; height:4px; background:#000; transform:translateY(-50%); }
+.attack-line { position:absolute; left:0; width:100%; height:2px; background: orange; }
+.attack-line.top { top:calc(50% - 120px); }
+.attack-line.bottom { top:calc(50% + 120px); }
+
+.player {
+  width:70px; height:30px; border-radius:6px; color:black;
+  font-size:13px; display:flex; align-items:center; justify-content:center;
+  position:absolute; cursor:grab; user-select:none; text-align:center;
+  padding:2px; box-shadow:0 0 3px rgba(0,0,0,0.7);
+}
+.player.yongTeam { border:2px solid #e74c3c; }
+.player.wonTeam { border:2px solid #3498db; }
+
+#players { margin-top:15px; display:flex; flex-wrap:wrap; width:540px; justify-content:center; }
+.player-card { width:80px; height:40px; border-radius:6px; margin:3px; display:flex; align-items:center; justify-content:center; cursor:grab; user-select:none; font-size:12px; text-align:center; padding:2px; color:black; }
+
+#teams { margin-top:10px; display:flex; gap:20px; font-weight:bold; font-size:16px; }
+#teams .yongTeam { color:#e74c3c; }
+#teams .wonTeam { color:#3498db; }
+
+button { margin-top:10px; padding:5px 10px; cursor:pointer; }
+
+#record-panel { width:280px; border:2px solid #333; padding:10px; height:720px; overflow-y:auto; font-size:12px; }
+#record-panel h3 { margin-top:0; font-size:14px; }
+.record-entry { display:flex; gap:5px; margin-bottom:5px; align-items:center; flex-wrap:wrap; }
+.record-entry input { width:60px; font-size:12px; }
+.record-entry button { font-size:11px; padding:2px 4px; }
+
+.tooltip {
+  position:absolute;
+  background: rgba(0,0,0,0.8);
+  color: #fff; padding:4px 6px;
+  border-radius:4px;
+  font-size:12px;
+  pointer-events:none;
+  white-space: nowrap;
+  z-index:1000;
+  display:none;
+}
+
+#ranking { margin-top:10px; font-size:13px; }
+#ranking div { margin-bottom:5px; }
+</style>
+
+<!-- 카카오톡 SDK -->
+<script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
+<script>
+Kakao.init('38d4cf994a686540d1cf65664e3fad5b');
+console.log(Kakao.isInitialized());
+</script>
+
+</head>
+<body>
+
+<div id="main">
+  <div id="left">
+    <h1>배구 팀 짜기</h1>
+    <h2>배치방법: 꾹 눌러서 드래그하기</h2>
+    <div id="teams">
+      <span class="yongTeam">Yong 팀</span>
+      <span class="wonTeam">Won 팀</span>
+    </div>
+    <div id="court">
+      <div id="inner-line"></div>
+      <div id="net"></div>
+      <div class="attack-line top"></div>
+      <div class="attack-line bottom"></div>
+    </div>
+    <div id="players"></div>
+    <div>
+      <button id="saveBtn">배치 저장</button>
+      <button id="loadBtn">배치 불러오기</button>
+      <button id="resetBtn">코트 초기화</button>
+      <button id="shareBtn">카카오톡 공유</button>
+    </div>
+  </div>
+
+  <div id="record-panel">
+    <h3>선수 기록 (비밀번호 입력 후 수정 가능)</h3>
+    <div id="password-entry">
+      <input type="password" id="passInput" placeholder="비밀번호">
+      <button id="passBtn">확인</button>
+      <div id="passStatus" style="color:red; font-size:12px;"></div>
+    </div>
+    <div id="selected-player">선택된 선수: 없음</div>
+    <div id="records-list"></div>
+    <div id="add-record" style="margin-top:10px;">
+      <input type="text" id="record-date" placeholder="월/일 (MM/DD)">
+      <input type="number" id="record-played" placeholder="참여 세트">
+      <input type="number" id="record-won" placeholder="승리 세트">
+      <button id="add-record-btn">추가</button>
+    </div>
+    <div id="ranking">
+      <h4>랭킹</h4>
+      <div id="totalSetsTop">총 세트수 1위: -</div>
+      <div id="winSetsTop">승리 세트 1위: -</div>
+      <div id="winRateTop">승률 1위: -</div>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const court = document.getElementById('court');
+const playersDiv = document.getElementById('players');
+const saveBtn = document.getElementById('saveBtn');
+const loadBtn = document.getElementById('loadBtn');
+const resetBtn = document.getElementById('resetBtn');
+const shareBtn = document.getElementById('shareBtn');
+const selectedPlayerDiv = document.getElementById('selected-player');
+const recordsList = document.getElementById('records-list');
+const recordDateInput = document.getElementById('record-date');
+const recordPlayedInput = document.getElementById('record-played');
+const recordWonInput = document.getElementById('record-won');
+const addRecordBtn = document.getElementById('add-record-btn');
+
+let draggedPlayer = null;
+let selectedPlayer = null;
+let canEdit = false;
+
+const rankingTotal = document.getElementById('totalSetsTop');
+const rankingWin = document.getElementById('winSetsTop');
+const rankingRate = document.getElementById('winRateTop');
+
+const playersData = [
+  {name:"김은주", gender:"F"}, {name:"이강하", gender:"F"}, {name:"하동교", gender:"M"},
+  {name:"김준호", gender:"M"}, {name:"신종열", gender:"M"}, {name:"이진식", gender:"M"},
+  {name:"김민중", gender:"M"}, {name:"양치모", gender:"M"}, {name:"정예훈", gender:"M"},
+  {name:"이소은", gender:"F"}, {name:"김민석", gender:"M"}, {name:"신상윤", gender:"M"},
+  {name:"이진아", gender:"F"}, {name:"김진옥", gender:"F"}, {name:"이원윤", gender:"M"},
+  {name:"오정민", gender:"M"}, {name:"전홍준", gender:"M"}, {name:"이상용", gender:"M"},
+  {name:"강혜송", gender:"F"}, {name:"이향미", gender:"F"}, {name:"정선미", gender:"F"},
+  {name:"최정민", gender:"F"}, {name:"이은희", gender:"F"}
+];
+
+let playerRecords = JSON.parse(localStorage.getItem('playerRecords')) || {};
+playersData.forEach(p=>{ if(!playerRecords[p.name]) playerRecords[p.name]=[]; });
+
+// 선수 카드 생성
+function createInitialPlayers(){
+  playersDiv.innerHTML='';
+  playersData.forEach(p=>{
+    const card = document.createElement('div');
+    card.classList.add('player-card');
+    card.innerText=p.name;
+    card.style.backgroundColor = p.gender==='M' ? 'orange' : '#7CFC00';
+    card.draggable=true;
+
+    card.addEventListener('dragstart', e=>{ draggedPlayer=e.target; });
+
+    card.addEventListener('click', ()=>{
+      selectedPlayer={name:p.name, gender:p.gender, isCard:true, element:card};
+      selectedPlayerDiv.innerText=`선택된 선수: ${p.name}`;
+      renderRecords();
+    });
+
+    playersDiv.appendChild(card);
+  });
+}
+createInitialPlayers();
+
+// 선수 배치 드래그 앤 드롭
+court.addEventListener('dragover', e=>e.preventDefault());
+court.addEventListener('drop', e=>{
+  e.preventDefault();
+  if(!draggedPlayer) return;
+
+  const rect = court.getBoundingClientRect();
+  const x = e.clientX - rect.left - 35;
+  const y = e.clientY - rect.top - 15;
+
+  const playerObj = playersData.find(p=>p.name===draggedPlayer.innerText);
+
+  // 기존 코트에 있는 선수 이동
+  if(draggedPlayer.classList.contains('player')){
+    draggedPlayer.style.left=`${x}px`;
+    draggedPlayer.style.top=`${y}px`;
+
+    const halfCourt = court.clientHeight / 2;
+    if(y + 15 < halfCourt){
+      draggedPlayer.classList.add('yongTeam'); draggedPlayer.classList.remove('wonTeam');
+    } else {
+      draggedPlayer.classList.add('wonTeam'); draggedPlayer.classList.remove('yongTeam');
+    }
+
+    draggedPlayer.style.backgroundColor = playerObj.gender==='M' ? 'orange' : '#7CFC00';
+    draggedPlayer = null;
+    return;
+  }
+
+  // 카드에서 새로 배치
+  const newPlayer = document.createElement('div');
+  newPlayer.classList.add('player');
+  const halfCourt = court.clientHeight / 2;
+  if(y + 15 < halfCourt) newPlayer.classList.add('yongTeam');
+  else newPlayer.classList.add('wonTeam');
+
+  newPlayer.style.left=`${x}px`;
+  newPlayer.style.top=`${y}px`;
+  newPlayer.innerText = draggedPlayer.innerText;
+  newPlayer.style.backgroundColor = playerObj.gender==='M' ? 'orange' : '#7CFC00';
+  newPlayer.style.color = 'black';
+
+  newPlayer.addEventListener('click', ()=>{
+    selectedPlayer={name:playerObj.name, gender:playerObj.gender, isCard:false, element:newPlayer};
+    selectedPlayerDiv.innerText=`선택된 선수: ${playerObj.name}`;
+    renderRecords();
+  });
+
+  newPlayer.draggable=true;
+  newPlayer.addEventListener('dragstart', e=>{ draggedPlayer=e.target; });
+
+  court.appendChild(newPlayer);
+  draggedPlayer.remove();
+  draggedPlayer=null;
+});
+
+// 비밀번호 확인
+document.getElementById('passBtn').addEventListener('click', ()=>{
+  const val = document.getElementById('passInput').value;
+  if(val==='4321'){ canEdit=true; document.getElementById('passStatus').innerText='승인됨'; }
+  else{ canEdit=false; document.getElementById('passStatus').innerText='비밀번호 틀림'; }
+});
+
+// 기록 렌더링
+function renderRecords(){
+  recordsList.innerHTML='';
+  if(!selectedPlayer) return;
+  const records = playerRecords[selectedPlayer.name];
+  records.forEach((r,i)=>{
+    const div = document.createElement('div');
+    div.classList.add('record-entry');
+    const lost = r.played - r.won;
+    div.innerHTML=`${r.date} 참여:${r.played}승:${r.won} 패:${lost} <button data-index="${i}">삭제</button>`;
+    div.querySelector('button').addEventListener('click', ()=>{
+      if(canEdit){
+        records.splice(i,1); renderRecords(); updateRanking(); savePlayerRecords();
+      } else alert('비밀번호를 입력해야 합니다.');
+    });
+    recordsList.appendChild(div);
+  });
+  updateRanking();
+}
+
+// 기록 추가
+addRecordBtn.addEventListener('click', ()=>{
+  if(!canEdit){ alert('비밀번호를 입력해야 합니다.'); return; }
+  if(!selectedPlayer){ alert('선수를 선택해주세요.'); return; }
+  const date = recordDateInput.value.trim();
+  const played = parseInt(recordPlayedInput.value);
+  const won = parseInt(recordWonInput.value);
+  if(!date || isNaN(played) || isNaN(won) || won>played){ alert('잘못된 입력입니다.'); return; }
+  playerRecords[selectedPlayer.name].push({date,played,won});
+  recordDateInput.value=''; recordPlayedInput.value=''; recordWonInput.value='';
+  renderRecords();
+  savePlayerRecords();
+});
+
+// 랭킹 업데이트
+function updateRanking(){
+  let maxPlayed=0,maxWon=0,maxRate=0;
+  let playedNames=[],wonNames=[],rateNames=[];
+  playersData.forEach(p=>{
+    const recs=playerRecords[p.name];
+    const totalPlayed=recs.reduce((a,b)=>a+b.played,0);
+    const totalWon=recs.reduce((a,b)=>a+b.won,0);
+    const rate = totalPlayed ? Math.round(totalWon/totalPlayed*100) : 0;
+
+    if(totalPlayed>maxPlayed){ maxPlayed=totalPlayed; playedNames=[p.name]; }
+    else if(totalPlayed===maxPlayed) playedNames.push(p.name);
+
+    if(totalWon>maxWon){ maxWon=totalWon; wonNames=[p.name]; }
+    else if(totalWon===maxWon) wonNames.push(p.name);
+
+    if(rate>maxRate){ maxRate=rate; rateNames=[p.name]; }
+    else if(rate===maxRate) rateNames.push(p.name);
+  });
+
+  rankingTotal.innerText=`총 세트수 1위: ${playedNames.join(', ')}`;
+  rankingWin.innerText=`승리 세트 1위: ${wonNames.join(', ')}`;
+  rankingRate.innerText=`승률 1위: ${rateNames.join(', ')}`;
+}
+
+function savePlayerRecords(){
+  localStorage.setItem('playerRecords', JSON.stringify(playerRecords));
+}
+
+// 배치 저장
+saveBtn.addEventListener('click', ()=>{
+  const players=court.querySelectorAll('.player');
+  const data=Array.from(players).map(p=>{
+    const playerObj = playersData.find(pl=>pl.name===p.innerText);
+    return { name:p.innerText, gender:playerObj.gender, team:p.classList.contains('yongTeam')?'Yong':'Won', x:parseFloat(p.style.left), y:parseFloat(p.style.top) };
+  });
+  localStorage.setItem('volleyballLayout',JSON.stringify(data));
+  alert('배치가 저장되었습니다.');
+});
+
+// 배치 불러오기
+loadBtn.addEventListener('click', ()=>{
+  const savedData=localStorage.getItem('volleyballLayout');
+  if(!savedData){ alert('저장된 배치가 없습니다.'); return; }
+  court.querySelectorAll('.player').forEach(p=>p.remove());
+  const data=JSON.parse(savedData);
+  data.forEach(d=>{
+    const newPlayer=document.createElement('div');
+    newPlayer.classList.add('player',d.team==='Yong'?'yongTeam':'wonTeam');
+    newPlayer.style.left=`${d.x}px`;
+    newPlayer.style.top=`${d.y}px`;
+    newPlayer.innerText=d.name;
+    newPlayer.style.backgroundColor = d.gender==='M' ? 'orange' : '#7CFC00';
+    newPlayer.style.color='black';
+    newPlayer.draggable=true;
+    newPlayer.addEventListener('click', ()=>{ 
+      selectedPlayer={name:newPlayer.innerText, gender:d.gender, isCard:false, element:newPlayer};
+      selectedPlayerDiv.innerText=`선택된 선수: ${newPlayer.innerText}`;
+      renderRecords();
+    });
+    newPlayer.addEventListener('dragstart', e=>{ draggedPlayer=e.target; });
+    court.appendChild(newPlayer);
+  });
+});
+
+// 코트 초기화
+resetBtn.addEventListener('click', ()=>{
+  court.querySelectorAll('.player').forEach(p=>p.remove());
+  createInitialPlayers();
+});
+
+// 카카오톡 공유
+shareBtn.addEventListener('click', ()=>{
+  const players=court.querySelectorAll('.player');
+  let message = "오늘 배구팀 배치:\n";
+  players.forEach(p=>{
+    const team = p.classList.contains('yongTeam') ? 'Yong팀' : 'Won팀';
+    message += `${p.innerText}(${team})\n`;
+  });
+
+  Kakao.Link.sendDefault({
+    objectType: 'text',
+    text: message,
+    link: {
+      mobileWebUrl: window.location.href,
+      webUrl: window.location.href
+    }
+  });
+});
+</script>
+
+</body>
+</html>
