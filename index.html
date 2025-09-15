@@ -42,7 +42,7 @@ button { margin-top:10px; padding:5px 10px; cursor:pointer; }
 #record-panel { width:280px; border:2px solid #333; padding:10px; height:720px; overflow-y:auto; font-size:12px; }
 #record-panel h3 { margin-top:0; font-size:14px; }
 .record-entry { display:flex; gap:5px; margin-bottom:5px; align-items:center; flex-wrap:wrap; }
-.record-entry input { width:60px; font-size:12px; }
+.record-entry input { width:50px; font-size:12px; }
 .record-entry button { font-size:11px; padding:2px 4px; }
 
 .tooltip {
@@ -233,16 +233,38 @@ function renderRecords(){
   records.forEach((r,i)=>{
     const div = document.createElement('div');
     div.classList.add('record-entry');
-    const lost = r.played - r.won;
-    div.innerHTML=`${r.date} 참여:${r.played} 승:${r.won} 패:${lost} <button data-index="${i}">삭제</button>`;
-    div.querySelector('button').addEventListener('click', ()=>{
-      if(canEdit){
-        records.splice(i,1);
-        renderRecords();
-        updateRanking();
-        savePlayerRecords();
-      } else alert('비밀번호를 입력해야 합니다.');
+
+    div.innerHTML=`
+      <input type="text" value="${r.date}" data-index="${i}" class="edit-date">
+      <input type="number" value="${r.played}" data-index="${i}" class="edit-played">
+      <input type="number" value="${r.won}" data-index="${i}" class="edit-won">
+      <span>패: ${r.played - r.won}</span>
+      <button class="save-btn" data-index="${i}">저장</button>
+      <button class="del-btn" data-index="${i}">삭제</button>
+    `;
+
+    // 삭제
+    div.querySelector('.del-btn').addEventListener('click', ()=>{
+      if(!canEdit){ alert('비밀번호를 입력해야 합니다.'); return; }
+      records.splice(i,1);
+      renderRecords();
+      updateRanking();
+      savePlayerRecords();
     });
+
+    // 수정/저장
+    div.querySelector('.save-btn').addEventListener('click', ()=>{
+      if(!canEdit){ alert('비밀번호를 입력해야 합니다.'); return; }
+      const newDate = div.querySelector('.edit-date').value.trim();
+      const newPlayed = parseInt(div.querySelector('.edit-played').value);
+      const newWon = parseInt(div.querySelector('.edit-won').value);
+      if(!newDate || isNaN(newPlayed) || isNaN(newWon) || newWon>newPlayed){ alert('잘못된 입력입니다.'); return; }
+      records[i] = {date:newDate, played:newPlayed, won:newWon};
+      renderRecords();
+      updateRanking();
+      savePlayerRecords();
+    });
+
     recordsList.appendChild(div);
   });
   updateRanking();
@@ -312,19 +334,16 @@ function loadLayout(){
   });
 }
 
-saveBtn.addEventListener('click', ()=>{
-  saveLayout();
-  alert('배치가 저장되었습니다.');
-});
+saveBtn.addEventListener('click', ()=>{ saveLayout(); alert('배치가 저장되었습니다.'); });
 loadBtn.addEventListener('click', ()=>{ loadLayout(); });
 resetBtn.addEventListener('click', ()=>{
   court.querySelectorAll('.player').forEach(p=>p.remove());
   createInitialPlayers();
 });
 
-// 카카오톡 공유 (저장된 배치 기반 이미지)
+// 카카오톡 공유
 shareBtn.addEventListener('click', ()=>{
-  loadLayout(); // 최신 저장 배치 불러오기
+  loadLayout();
   setTimeout(()=>{
     html2canvas(court).then(canvas=>{
       const imageUrl = canvas.toDataURL('image/png');
@@ -341,7 +360,7 @@ shareBtn.addEventListener('click', ()=>{
         }
       });
     });
-  },200); // loadLayout 적용 후 캡처
+  },200);
 });
 </script>
 
