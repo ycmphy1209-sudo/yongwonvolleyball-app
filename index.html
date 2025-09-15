@@ -15,7 +15,7 @@ h2 { font-size:16px; margin-bottom:10px; color:#555; }
   position:relative; width:360px; height:720px;
   background:#f5f5f5; border:4px solid #333; box-sizing:border-box;
 }
-#inner-line { position:absolute; top:10px; left:10px; width:calc(100%-20px); height:calc(100%-20px); border:2px solid #999; box-sizing:border-box; pointer-events:none; }
+#inner-line { position:absolute; top:10px; left:10px; width:calc(100% - 20px); height:calc(100% - 20px); border:2px solid #999; box-sizing:border-box; pointer-events:none; }
 #net { position:absolute; top:50%; left:0; width:100%; height:4px; background:#000; transform:translateY(-50%); }
 .attack-line { position:absolute; left:0; width:100%; height:2px; background: orange; }
 .attack-line.top { top:calc(50% - 120px); }
@@ -61,9 +61,7 @@ button { margin-top:10px; padding:5px 10px; cursor:pointer; }
 #ranking div { margin-bottom:5px; }
 </style>
 
-<!-- html2canvas 라이브러리 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
 </head>
 <body>
 
@@ -86,7 +84,7 @@ button { margin-top:10px; padding:5px 10px; cursor:pointer; }
       <button id="saveBtn">배치 저장</button>
       <button id="loadBtn">배치 불러오기</button>
       <button id="resetBtn">코트 초기화</button>
-      <button id="shareBtn">이미지로 공유</button>
+      <button id="downloadBtn">이미지로 공유하기</button>
     </div>
   </div>
 
@@ -114,29 +112,30 @@ button { margin-top:10px; padding:5px 10px; cursor:pointer; }
   </div>
 </div>
 
-<div class="tooltip" id="tooltip"></div>
-
 <script>
 const court = document.getElementById('court');
 const playersDiv = document.getElementById('players');
 const saveBtn = document.getElementById('saveBtn');
 const loadBtn = document.getElementById('loadBtn');
 const resetBtn = document.getElementById('resetBtn');
-const shareBtn = document.getElementById('shareBtn');
+const downloadBtn = document.getElementById('downloadBtn');
 const selectedPlayerDiv = document.getElementById('selected-player');
 const recordsList = document.getElementById('records-list');
 const recordDateInput = document.getElementById('record-date');
 const recordPlayedInput = document.getElementById('record-played');
 const recordWonInput = document.getElementById('record-won');
 const addRecordBtn = document.getElementById('add-record-btn');
-
-let draggedPlayer = null;
-let selectedPlayer = null;
-let canEdit = false;
+const passInput = document.getElementById('passInput');
+const passBtn = document.getElementById('passBtn');
+const passStatus = document.getElementById('passStatus');
 
 const rankingTotal = document.getElementById('totalSetsTop');
 const rankingWin = document.getElementById('winSetsTop');
 const rankingRate = document.getElementById('winRateTop');
+
+let draggedPlayer = null;
+let selectedPlayer = null;
+let canEdit = false;
 
 const playersData = [
   {name:"김은주", gender:"F"}, {name:"이강하", gender:"F"},
@@ -159,9 +158,6 @@ playersData.forEach(p=>{ if(!playerRecords[p.name]) playerRecords[p.name]=[]; })
 function createInitialPlayers(){
   playersDiv.innerHTML='';
   playersData.forEach(p=>{
-    // 이미 코트 위에 있으면 카드 생성 안함
-    if(Array.from(court.querySelectorAll('.player')).some(pl=>pl.innerText===p.name)) return;
-
     const card = document.createElement('div');
     card.classList.add('player-card');
     card.innerText=p.name;
@@ -190,54 +186,37 @@ court.addEventListener('drop', e=>{
   const y = e.clientY - rect.top - 15;
   const playerObj = playersData.find(p=>p.name===draggedPlayer.innerText);
 
-  // 이미 코트 위에 있으면 이동만
-  let existing = Array.from(court.querySelectorAll('.player')).find(p=>p.innerText===playerObj.name);
-  if(existing){
-    existing.style.left = `${x}px`;
-    existing.style.top = `${y}px`;
+  // 중복 방지: 이미 코트에 있는 선수는 제거
+  const existing = court.querySelectorAll('.player');
+  existing.forEach(p=>{ if(p.innerText===playerObj.name) p.remove(); });
 
-    // 팀 업데이트
-    if(y < 360){
-      existing.classList.add('yongTeam');
-      existing.classList.remove('wonTeam');
-    } else {
-      existing.classList.add('wonTeam');
-      existing.classList.remove('yongTeam');
-    }
-    existing.style.border = existing.classList.contains('yongTeam') ? '2px solid #e74c3c' : '2px solid #3498db';
-    draggedPlayer = null;
-    return;
-  }
-
-  // 새로 배치
   const newPlayer = document.createElement('div');
   newPlayer.classList.add('player');
-  if(y<360) newPlayer.classList.add('yongTeam');
-  else newPlayer.classList.add('wonTeam');
-
+  newPlayer.classList.add(y<360?'yongTeam':'wonTeam');
   newPlayer.style.left=`${x}px`;
   newPlayer.style.top=`${y}px`;
-  newPlayer.innerText = draggedPlayer.innerText;
+  newPlayer.innerText = playerObj.name;
   newPlayer.style.backgroundColor = playerObj.gender==='M' ? 'orange' : '#7CFC00';
   newPlayer.style.color = 'black';
-  newPlayer.style.border = newPlayer.classList.contains('yongTeam') ? '2px solid #e74c3c' : '2px solid #3498db';
 
+  newPlayer.draggable=true;
   newPlayer.addEventListener('click', ()=>{
     selectedPlayer={name:playerObj.name, gender:playerObj.gender, isCard:false, element:newPlayer};
     selectedPlayerDiv.innerText=`선택된 선수: ${playerObj.name}`;
     renderRecords();
   });
 
-  newPlayer.draggable=true;
-  newPlayer.addEventListener('dragstart', e=>{ draggedPlayer=e.target; });
+  newPlayer.addEventListener('dragend', e=>{
+    const topPos = parseFloat(newPlayer.style.top) + newPlayer.offsetHeight/2;
+    newPlayer.classList.remove('yongTeam','wonTeam');
+    newPlayer.classList.add(topPos<360?'yongTeam':'wonTeam');
+  });
+
   court.appendChild(newPlayer);
   if(draggedPlayer.classList.contains('player-card')) draggedPlayer.remove();
   draggedPlayer=null;
 });
 
-const passInput = document.getElementById('passInput');
-const passBtn = document.getElementById('passBtn');
-const passStatus = document.getElementById('passStatus');
 passBtn.addEventListener('click', ()=>{
   if(passInput.value==='4321'){ canEdit=true; passStatus.innerText='승인됨'; }
   else{ canEdit=false; passStatus.innerText='비밀번호 틀림'; }
@@ -322,32 +301,40 @@ function loadLayout(){
     newPlayer.innerText=d.name;
     newPlayer.style.backgroundColor = d.gender==='M' ? 'orange' : '#7CFC00';
     newPlayer.style.color='black';
-    newPlayer.style.border = newPlayer.classList.contains('yongTeam') ? '2px solid #e74c3c' : '2px solid #3498db';
     newPlayer.draggable=true;
-    newPlayer.addEventListener('click', ()=>{ selectedPlayer={name:newPlayer.innerText, gender:d.gender, isCard:false, element:newPlayer}; selectedPlayerDiv.innerText=`선택된 선수: ${newPlayer.innerText}`; renderRecords(); });
+    newPlayer.addEventListener('click', ()=>{
+      selectedPlayer={name:newPlayer.innerText, gender:d.gender, isCard:false, element:newPlayer};
+      selectedPlayerDiv.innerText=`선택된 선수: ${newPlayer.innerText}`;
+      renderRecords();
+    });
+    newPlayer.addEventListener('dragend', e=>{
+      const topPos = parseFloat(newPlayer.style.top) + newPlayer.offsetHeight/2;
+      newPlayer.classList.remove('yongTeam','wonTeam');
+      newPlayer.classList.add(topPos<360?'yongTeam':'wonTeam');
+    });
     newPlayer.addEventListener('dragstart', e=>{ draggedPlayer=e.target; });
     court.appendChild(newPlayer);
   });
 }
 
-saveBtn.addEventListener('click', ()=>{ saveLayout(); alert('배치가 저장되었습니다.'); });
+saveBtn.addEventListener('click', ()=>{
+  saveLayout();
+  alert('배치가 저장되었습니다.');
+});
 loadBtn.addEventListener('click', ()=>{ loadLayout(); });
 resetBtn.addEventListener('click', ()=>{
   court.querySelectorAll('.player').forEach(p=>p.remove());
   createInitialPlayers();
 });
 
-// 이미지로 공유
-shareBtn.addEventListener('click', ()=>{
-  loadLayout();
-  setTimeout(()=>{
-    html2canvas(court).then(canvas=>{
-      const link = document.createElement('a');
-      link.href = canvas.toDataURL('image/png');
-      link.download = 'volleyball_layout.png';
-      link.click();
-    });
-  },200);
+// 이미지 다운로드 버튼
+downloadBtn.addEventListener('click', ()=>{
+  html2canvas(court).then(canvas=>{
+    const link = document.createElement('a');
+    link.download = 'volleyball_layout.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  });
 });
 </script>
 
