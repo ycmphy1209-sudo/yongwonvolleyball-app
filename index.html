@@ -61,10 +61,13 @@ button { margin-top:10px; padding:5px 10px; cursor:pointer; }
 #ranking div { margin-bottom:5px; }
 </style>
 
+<!-- html2canvas 라이브러리 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
 <!-- 카카오톡 SDK -->
 <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
 <script>
-Kakao.init('38d4cf994a686540d1cf65664e3fad5b');
+Kakao.init('38d4cf994a686540d1cf65664e3fad5b'); // JavaScript Key
 console.log(Kakao.isInitialized());
 </script>
 
@@ -143,20 +146,23 @@ const rankingWin = document.getElementById('winSetsTop');
 const rankingRate = document.getElementById('winRateTop');
 
 const playersData = [
-  {name:"김은주", gender:"F"}, {name:"이강하", gender:"F"}, {name:"하동교", gender:"M"},
-  {name:"김준호", gender:"M"}, {name:"신종열", gender:"M"}, {name:"이진식", gender:"M"},
-  {name:"김민중", gender:"M"}, {name:"양치모", gender:"M"}, {name:"정예훈", gender:"M"},
-  {name:"이소은", gender:"F"}, {name:"김민석", gender:"M"}, {name:"신상윤", gender:"M"},
-  {name:"이진아", gender:"F"}, {name:"김진옥", gender:"F"}, {name:"이원윤", gender:"M"},
-  {name:"오정민", gender:"M"}, {name:"전홍준", gender:"M"}, {name:"이상용", gender:"M"},
-  {name:"강혜송", gender:"F"}, {name:"이향미", gender:"F"}, {name:"정선미", gender:"F"},
-  {name:"최정민", gender:"F"}, {name:"이은희", gender:"F"}
+  {name:"김은주", gender:"F"}, {name:"이강하", gender:"F"},
+  {name:"하동교", gender:"M"}, {name:"김준호", gender:"M"},
+  {name:"신종열", gender:"M"}, {name:"이진식", gender:"M"},
+  {name:"김민중", gender:"M"}, {name:"양치모", gender:"M"},
+  {name:"정예훈", gender:"M"}, {name:"이소은", gender:"F"},
+  {name:"김민석", gender:"M"}, {name:"신상윤", gender:"M"},
+  {name:"이진아", gender:"F"}, {name:"김진옥", gender:"F"},
+  {name:"이원윤", gender:"M"}, {name:"오정민", gender:"M"},
+  {name:"전홍준", gender:"M"}, {name:"이상용", gender:"M"},
+  {name:"강혜송", gender:"F"}, {name:"이향미", gender:"F"},
+  {name:"정선미", gender:"F"}, {name:"최정민", gender:"F"},
+  {name:"이은희", gender:"F"}
 ];
 
 let playerRecords = JSON.parse(localStorage.getItem('playerRecords')) || {};
 playersData.forEach(p=>{ if(!playerRecords[p.name]) playerRecords[p.name]=[]; });
 
-// 선수 카드 생성
 function createInitialPlayers(){
   playersDiv.innerHTML='';
   playersData.forEach(p=>{
@@ -179,40 +185,18 @@ function createInitialPlayers(){
 }
 createInitialPlayers();
 
-// 선수 배치 드래그 앤 드롭
 court.addEventListener('dragover', e=>e.preventDefault());
 court.addEventListener('drop', e=>{
   e.preventDefault();
   if(!draggedPlayer) return;
-
   const rect = court.getBoundingClientRect();
   const x = e.clientX - rect.left - 35;
   const y = e.clientY - rect.top - 15;
-
   const playerObj = playersData.find(p=>p.name===draggedPlayer.innerText);
 
-  // 기존 코트에 있는 선수 이동
-  if(draggedPlayer.classList.contains('player')){
-    draggedPlayer.style.left=`${x}px`;
-    draggedPlayer.style.top=`${y}px`;
-
-    const halfCourt = court.clientHeight / 2;
-    if(y + 15 < halfCourt){
-      draggedPlayer.classList.add('yongTeam'); draggedPlayer.classList.remove('wonTeam');
-    } else {
-      draggedPlayer.classList.add('wonTeam'); draggedPlayer.classList.remove('yongTeam');
-    }
-
-    draggedPlayer.style.backgroundColor = playerObj.gender==='M' ? 'orange' : '#7CFC00';
-    draggedPlayer = null;
-    return;
-  }
-
-  // 카드에서 새로 배치
   const newPlayer = document.createElement('div');
   newPlayer.classList.add('player');
-  const halfCourt = court.clientHeight / 2;
-  if(y + 15 < halfCourt) newPlayer.classList.add('yongTeam');
+  if(y<360) newPlayer.classList.add('yongTeam');
   else newPlayer.classList.add('wonTeam');
 
   newPlayer.style.left=`${x}px`;
@@ -229,20 +213,19 @@ court.addEventListener('drop', e=>{
 
   newPlayer.draggable=true;
   newPlayer.addEventListener('dragstart', e=>{ draggedPlayer=e.target; });
-
   court.appendChild(newPlayer);
-  draggedPlayer.remove();
+  if(draggedPlayer.classList.contains('player-card')) draggedPlayer.remove();
   draggedPlayer=null;
 });
 
-// 비밀번호 확인
-document.getElementById('passBtn').addEventListener('click', ()=>{
-  const val = document.getElementById('passInput').value;
-  if(val==='4321'){ canEdit=true; document.getElementById('passStatus').innerText='승인됨'; }
-  else{ canEdit=false; document.getElementById('passStatus').innerText='비밀번호 틀림'; }
+const passInput = document.getElementById('passInput');
+const passBtn = document.getElementById('passBtn');
+const passStatus = document.getElementById('passStatus');
+passBtn.addEventListener('click', ()=>{
+  if(passInput.value==='4321'){ canEdit=true; passStatus.innerText='승인됨'; }
+  else{ canEdit=false; passStatus.innerText='비밀번호 틀림'; }
 });
 
-// 기록 렌더링
 function renderRecords(){
   recordsList.innerHTML='';
   if(!selectedPlayer) return;
@@ -251,10 +234,13 @@ function renderRecords(){
     const div = document.createElement('div');
     div.classList.add('record-entry');
     const lost = r.played - r.won;
-    div.innerHTML=`${r.date} 참여:${r.played}승:${r.won} 패:${lost} <button data-index="${i}">삭제</button>`;
+    div.innerHTML=`${r.date} 참여:${r.played} 승:${r.won} 패:${lost} <button data-index="${i}">삭제</button>`;
     div.querySelector('button').addEventListener('click', ()=>{
       if(canEdit){
-        records.splice(i,1); renderRecords(); updateRanking(); savePlayerRecords();
+        records.splice(i,1);
+        renderRecords();
+        updateRanking();
+        savePlayerRecords();
       } else alert('비밀번호를 입력해야 합니다.');
     });
     recordsList.appendChild(div);
@@ -262,7 +248,6 @@ function renderRecords(){
   updateRanking();
 }
 
-// 기록 추가
 addRecordBtn.addEventListener('click', ()=>{
   if(!canEdit){ alert('비밀번호를 입력해야 합니다.'); return; }
   if(!selectedPlayer){ alert('선수를 선택해주세요.'); return; }
@@ -276,7 +261,6 @@ addRecordBtn.addEventListener('click', ()=>{
   savePlayerRecords();
 });
 
-// 랭킹 업데이트
 function updateRanking(){
   let maxPlayed=0,maxWon=0,maxRate=0;
   let playedNames=[],wonNames=[],rateNames=[];
@@ -285,27 +269,20 @@ function updateRanking(){
     const totalPlayed=recs.reduce((a,b)=>a+b.played,0);
     const totalWon=recs.reduce((a,b)=>a+b.won,0);
     const rate = totalPlayed ? Math.round(totalWon/totalPlayed*100) : 0;
-
     if(totalPlayed>maxPlayed){ maxPlayed=totalPlayed; playedNames=[p.name]; }
     else if(totalPlayed===maxPlayed) playedNames.push(p.name);
-
     if(totalWon>maxWon){ maxWon=totalWon; wonNames=[p.name]; }
     else if(totalWon===maxWon) wonNames.push(p.name);
-
     if(rate>maxRate){ maxRate=rate; rateNames=[p.name]; }
     else if(rate===maxRate) rateNames.push(p.name);
   });
-
   rankingTotal.innerText=`총 세트수 1위: ${playedNames.join(', ')}`;
   rankingWin.innerText=`승리 세트 1위: ${wonNames.join(', ')}`;
   rankingRate.innerText=`승률 1위: ${rateNames.join(', ')}`;
 }
 
-function savePlayerRecords(){
-  localStorage.setItem('playerRecords', JSON.stringify(playerRecords));
-}
+function savePlayerRecords(){ localStorage.setItem('playerRecords', JSON.stringify(playerRecords)); }
 
-// 배치 저장
 saveBtn.addEventListener('click', ()=>{
   const players=court.querySelectorAll('.player');
   const data=Array.from(players).map(p=>{
@@ -316,7 +293,6 @@ saveBtn.addEventListener('click', ()=>{
   alert('배치가 저장되었습니다.');
 });
 
-// 배치 불러오기
 loadBtn.addEventListener('click', ()=>{
   const savedData=localStorage.getItem('volleyballLayout');
   if(!savedData){ alert('저장된 배치가 없습니다.'); return; }
@@ -331,38 +307,34 @@ loadBtn.addEventListener('click', ()=>{
     newPlayer.style.backgroundColor = d.gender==='M' ? 'orange' : '#7CFC00';
     newPlayer.style.color='black';
     newPlayer.draggable=true;
-    newPlayer.addEventListener('click', ()=>{ 
-      selectedPlayer={name:newPlayer.innerText, gender:d.gender, isCard:false, element:newPlayer};
-      selectedPlayerDiv.innerText=`선택된 선수: ${newPlayer.innerText}`;
-      renderRecords();
-    });
+    newPlayer.addEventListener('click', ()=>{ selectedPlayer={name:newPlayer.innerText, gender:d.gender, isCard:false, element:newPlayer}; selectedPlayerDiv.innerText=`선택된 선수: ${newPlayer.innerText}`; renderRecords(); });
     newPlayer.addEventListener('dragstart', e=>{ draggedPlayer=e.target; });
     court.appendChild(newPlayer);
   });
 });
 
-// 코트 초기화
 resetBtn.addEventListener('click', ()=>{
   court.querySelectorAll('.player').forEach(p=>p.remove());
   createInitialPlayers();
 });
 
-// 카카오톡 공유
+// 🟢 카카오톡 공유 (코트 이미지 포함)
 shareBtn.addEventListener('click', ()=>{
-  const players=court.querySelectorAll('.player');
-  let message = "오늘 배구팀 배치:\n";
-  players.forEach(p=>{
-    const team = p.classList.contains('yongTeam') ? 'Yong팀' : 'Won팀';
-    message += `${p.innerText}(${team})\n`;
-  });
+  html2canvas(court).then(canvas=>{
+    const imageUrl = canvas.toDataURL('image/png');
 
-  Kakao.Link.sendDefault({
-    objectType: 'text',
-    text: message,
-    link: {
-      mobileWebUrl: window.location.href,
-      webUrl: window.location.href
-    }
+    Kakao.Link.sendDefault({
+      objectType: 'feed',
+      content: {
+        title: '오늘 배구팀 배치',
+        description: '코트 위 배치 상태입니다.',
+        imageUrl: imageUrl,
+        link: {
+          mobileWebUrl: 'https://ycmphy1209-sudo.github.io',
+          webUrl: 'https://ycmphy1209-sudo.github.io'
+        }
+      }
+    });
   });
 });
 </script>
