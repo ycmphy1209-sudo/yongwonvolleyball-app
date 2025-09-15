@@ -283,17 +283,16 @@ function updateRanking(){
 
 function savePlayerRecords(){ localStorage.setItem('playerRecords', JSON.stringify(playerRecords)); }
 
-saveBtn.addEventListener('click', ()=>{
+function saveLayout(){
   const players=court.querySelectorAll('.player');
   const data=Array.from(players).map(p=>{
     const playerObj = playersData.find(pl=>pl.name===p.innerText);
     return { name:p.innerText, gender:playerObj.gender, team:p.classList.contains('yongTeam')?'Yong':'Won', x:parseFloat(p.style.left), y:parseFloat(p.style.top) };
   });
   localStorage.setItem('volleyballLayout',JSON.stringify(data));
-  alert('배치가 저장되었습니다.');
-});
+}
 
-loadBtn.addEventListener('click', ()=>{
+function loadLayout(){
   const savedData=localStorage.getItem('volleyballLayout');
   if(!savedData){ alert('저장된 배치가 없습니다.'); return; }
   court.querySelectorAll('.player').forEach(p=>p.remove());
@@ -311,31 +310,38 @@ loadBtn.addEventListener('click', ()=>{
     newPlayer.addEventListener('dragstart', e=>{ draggedPlayer=e.target; });
     court.appendChild(newPlayer);
   });
-});
+}
 
+saveBtn.addEventListener('click', ()=>{
+  saveLayout();
+  alert('배치가 저장되었습니다.');
+});
+loadBtn.addEventListener('click', ()=>{ loadLayout(); });
 resetBtn.addEventListener('click', ()=>{
   court.querySelectorAll('.player').forEach(p=>p.remove());
   createInitialPlayers();
 });
 
-// 🟢 카카오톡 공유 (코트 이미지 포함)
+// 카카오톡 공유 (저장된 배치 기반 이미지)
 shareBtn.addEventListener('click', ()=>{
-  html2canvas(court).then(canvas=>{
-    const imageUrl = canvas.toDataURL('image/png');
-
-    Kakao.Link.sendDefault({
-      objectType: 'feed',
-      content: {
-        title: '오늘 배구팀 배치',
-        description: '코트 위 배치 상태입니다.',
-        imageUrl: imageUrl,
-        link: {
-          mobileWebUrl: 'https://ycmphy1209-sudo.github.io',
-          webUrl: 'https://ycmphy1209-sudo.github.io'
+  loadLayout(); // 최신 저장 배치 불러오기
+  setTimeout(()=>{
+    html2canvas(court).then(canvas=>{
+      const imageUrl = canvas.toDataURL('image/png');
+      Kakao.Link.sendDefault({
+        objectType: 'feed',
+        content: {
+          title: '오늘 배구팀 배치',
+          description: '코트 위 배치 상태입니다.',
+          imageUrl: imageUrl,
+          link: {
+            mobileWebUrl: 'https://ycmphy1209-sudo.github.io',
+            webUrl: 'https://ycmphy1209-sudo.github.io'
+          }
         }
-      }
+      });
     });
-  });
+  },200); // loadLayout 적용 후 캡처
 });
 </script>
 
