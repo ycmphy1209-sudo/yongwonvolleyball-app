@@ -49,9 +49,10 @@ button { margin-top:10px; padding:5px 10px; cursor:pointer; }
 #ranking div { margin-bottom:5px; }
 </style>
 
-<!-- 라이브러리 -->
+<!-- html2canvas 라이브러리 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<!-- 카카오톡 SDK -->
 <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
 <script>
 Kakao.init('38d4cf994a686540d1cf65664e3fad5b'); // JavaScript Key
@@ -80,7 +81,7 @@ console.log(Kakao.isInitialized());
       <button id="saveBtn">배치 저장</button>
       <button id="loadBtn">배치 불러오기</button>
       <button id="resetBtn">코트 초기화</button>
-      <button id="shareBtn">PDF 공유</button>
+      <button id="shareBtn">카카오톡 공유</button>
     </div>
   </div>
 
@@ -158,6 +159,7 @@ function createInitialPlayers(){
     card.draggable=true;
 
     card.addEventListener('dragstart', e=>{ draggedPlayer=e.target; });
+
     card.addEventListener('click', ()=>{
       selectedPlayer={name:p.name, gender:p.gender, isCard:true, element:card};
       selectedPlayerDiv.innerText=`선택된 선수: ${p.name}`;
@@ -303,32 +305,26 @@ resetBtn.addEventListener('click', ()=>{
   createInitialPlayers();
 });
 
-// PDF 공유 기능
-shareBtn.addEventListener('click', async ()=>{
-  loadLayout();
-  setTimeout(async ()=>{
-    const canvas = await html2canvas(court);
-    const imgData = canvas.toDataURL('image/png');
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'px',
-      format: [canvas.width, canvas.height]
+// 카카오톡 공유 (이미지로)
+shareBtn.addEventListener('click', ()=>{
+  loadLayout(); // 최신 저장 배치 불러오기
+  setTimeout(()=>{
+    html2canvas(court).then(canvas=>{
+      const imageUrl = canvas.toDataURL('image/png');
+      Kakao.Link.sendDefault({
+        objectType: 'feed',
+        content: {
+          title: '오늘 배구팀 배치',
+          description: '코트 위 배치 상태입니다.',
+          imageUrl: imageUrl,
+          link: {
+            mobileWebUrl: 'https://ycmphy1209-sudo.github.io',
+            webUrl: 'https://ycmphy1209-sudo.github.io'
+          }
+        }
+      });
     });
-    pdf.addImage(imgData,'PNG',0,0,canvas.width,canvas.height);
-    const pdfBlob = pdf.output('blob');
-    const blobUrl = URL.createObjectURL(pdfBlob);
-
-    Kakao.Link.sendDefault({
-      objectType: 'feed',
-      content: {
-        title: '오늘 배구팀 배치 (PDF)',
-        description: '코트 배치 PDF 파일입니다.',
-        imageUrl: imgData,
-        link: { mobileWebUrl: blobUrl, webUrl: blobUrl }
-      }
-    });
-  }, 200);
+  },200);
 });
 </script>
 
