@@ -42,29 +42,16 @@ button { margin-top:10px; padding:5px 10px; cursor:pointer; }
 #record-panel { width:280px; border:2px solid #333; padding:10px; height:720px; overflow-y:auto; font-size:12px; }
 #record-panel h3 { margin-top:0; font-size:14px; }
 .record-entry { display:flex; gap:5px; margin-bottom:5px; align-items:center; flex-wrap:wrap; }
-.record-entry input { width:50px; font-size:12px; }
+.record-entry input { width:60px; font-size:12px; }
 .record-entry button { font-size:11px; padding:2px 4px; }
-
-.tooltip {
-  position:absolute;
-  background: rgba(0,0,0,0.8);
-  color: #fff; padding:4px 6px;
-  border-radius:4px;
-  font-size:12px;
-  pointer-events:none;
-  white-space: nowrap;
-  z-index:1000;
-  display:none;
-}
 
 #ranking { margin-top:10px; font-size:13px; }
 #ranking div { margin-bottom:5px; }
 </style>
 
-<!-- html2canvas 라이브러리 -->
+<!-- 라이브러리 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
-<!-- 카카오톡 SDK -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
 <script>
 Kakao.init('38d4cf994a686540d1cf65664e3fad5b'); // JavaScript Key
@@ -93,7 +80,7 @@ console.log(Kakao.isInitialized());
       <button id="saveBtn">배치 저장</button>
       <button id="loadBtn">배치 불러오기</button>
       <button id="resetBtn">코트 초기화</button>
-      <button id="shareBtn">카카오톡 공유</button>
+      <button id="shareBtn">PDF 공유</button>
     </div>
   </div>
 
@@ -120,8 +107,6 @@ console.log(Kakao.isInitialized());
     </div>
   </div>
 </div>
-
-<div class="tooltip" id="tooltip"></div>
 
 <script>
 const court = document.getElementById('court');
@@ -173,7 +158,6 @@ function createInitialPlayers(){
     card.draggable=true;
 
     card.addEventListener('dragstart', e=>{ draggedPlayer=e.target; });
-
     card.addEventListener('click', ()=>{
       selectedPlayer={name:p.name, gender:p.gender, isCard:true, element:card};
       selectedPlayerDiv.innerText=`선택된 선수: ${p.name}`;
@@ -233,38 +217,16 @@ function renderRecords(){
   records.forEach((r,i)=>{
     const div = document.createElement('div');
     div.classList.add('record-entry');
-
-    div.innerHTML=`
-      <input type="text" value="${r.date}" data-index="${i}" class="edit-date">
-      <input type="number" value="${r.played}" data-index="${i}" class="edit-played">
-      <input type="number" value="${r.won}" data-index="${i}" class="edit-won">
-      <span>패: ${r.played - r.won}</span>
-      <button class="save-btn" data-index="${i}">저장</button>
-      <button class="del-btn" data-index="${i}">삭제</button>
-    `;
-
-    // 삭제
-    div.querySelector('.del-btn').addEventListener('click', ()=>{
-      if(!canEdit){ alert('비밀번호를 입력해야 합니다.'); return; }
-      records.splice(i,1);
-      renderRecords();
-      updateRanking();
-      savePlayerRecords();
+    const lost = r.played - r.won;
+    div.innerHTML=`${r.date} 참여:${r.played} 승:${r.won} 패:${lost} <button data-index="${i}">삭제</button>`;
+    div.querySelector('button').addEventListener('click', ()=>{
+      if(canEdit){
+        records.splice(i,1);
+        renderRecords();
+        updateRanking();
+        savePlayerRecords();
+      } else alert('비밀번호를 입력해야 합니다.');
     });
-
-    // 수정/저장
-    div.querySelector('.save-btn').addEventListener('click', ()=>{
-      if(!canEdit){ alert('비밀번호를 입력해야 합니다.'); return; }
-      const newDate = div.querySelector('.edit-date').value.trim();
-      const newPlayed = parseInt(div.querySelector('.edit-played').value);
-      const newWon = parseInt(div.querySelector('.edit-won').value);
-      if(!newDate || isNaN(newPlayed) || isNaN(newWon) || newWon>newPlayed){ alert('잘못된 입력입니다.'); return; }
-      records[i] = {date:newDate, played:newPlayed, won:newWon};
-      renderRecords();
-      updateRanking();
-      savePlayerRecords();
-    });
-
     recordsList.appendChild(div);
   });
   updateRanking();
@@ -341,26 +303,32 @@ resetBtn.addEventListener('click', ()=>{
   createInitialPlayers();
 });
 
-// 카카오톡 공유
-shareBtn.addEventListener('click', ()=>{
+// PDF 공유 기능
+shareBtn.addEventListener('click', async ()=>{
   loadLayout();
-  setTimeout(()=>{
-    html2canvas(court).then(canvas=>{
-      const imageUrl = canvas.toDataURL('image/png');
-      Kakao.Link.sendDefault({
-        objectType: 'feed',
-        content: {
-          title: '오늘 배구팀 배치',
-          description: '코트 위 배치 상태입니다.',
-          imageUrl: imageUrl,
-          link: {
-            mobileWebUrl: 'https://ycmphy1209-sudo.github.io',
-            webUrl: 'https://ycmphy1209-sudo.github.io'
-          }
-        }
-      });
+  setTimeout(async ()=>{
+    const canvas = await html2canvas(court);
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'px',
+      format: [canvas.width, canvas.height]
     });
-  },200);
+    pdf.addImage(imgData,'PNG',0,0,canvas.width,canvas.height);
+    const pdfBlob = pdf.output('blob');
+    const blobUrl = URL.createObjectURL(pdfBlob);
+
+    Kakao.Link.sendDefault({
+      objectType: 'feed',
+      content: {
+        title: '오늘 배구팀 배치 (PDF)',
+        description: '코트 배치 PDF 파일입니다.',
+        imageUrl: imgData,
+        link: { mobileWebUrl: blobUrl, webUrl: blobUrl }
+      }
+    });
+  }, 200);
 });
 </script>
 
